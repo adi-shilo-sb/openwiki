@@ -56,6 +56,7 @@ import {
   CONVERSATION_HISTORY_MOUNT,
   createAgentBackend,
 } from "./agent-backend.js";
+import { createBedrockPromptCachingMiddleware } from "./bedrock-prompt-caching-middleware.js";
 import { runNativeRepositoryGeneration } from "./repository-runner.js";
 import {
   createVertexAuthFetch,
@@ -483,8 +484,9 @@ function createOpenWikiAgentGraph(
     tools: createOpenWikiConnectorTools(options.outputMode),
     checkpointer: options.checkpointer,
     backend,
-    middleware:
-      options.command === "chat"
+    middleware: [
+      createBedrockPromptCachingMiddleware(),
+      ...(options.command === "chat"
         ? []
         : [
             ...(translation
@@ -523,7 +525,8 @@ function createOpenWikiAgentGraph(
               conceptType,
               options.runTimestamp,
             ),
-          ],
+          ]),
+    ],
     skills: ["/skills/"],
     subagents: [],
     permissions: AGENT_FILESYSTEM_PERMISSIONS,

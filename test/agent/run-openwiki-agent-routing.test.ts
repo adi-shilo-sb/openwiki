@@ -119,6 +119,22 @@ describe("runOpenWikiAgent repository routing", () => {
     expect(harness.createDeepAgent).not.toHaveBeenCalled();
   });
 
+  test("installs Bedrock prompt caching on every shared-graph command", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "openwiki-routing-"));
+    temporaryDirectories.push(root);
+
+    for (const command of ["init", "chat"] as const) {
+      await runOpenWikiAgent(command, root, { outputMode: "local-wiki" });
+    }
+
+    expect(harness.createDeepAgent).toHaveBeenCalledTimes(2);
+    for (const [{ middleware }] of harness.createDeepAgent.mock.calls) {
+      expect(
+        (middleware as Array<{ name?: string }>).map(({ name }) => name),
+      ).toContain("OpenWikiBedrockPromptCaching");
+    }
+  });
+
   test("retains personal init on the shared graph path", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "openwiki-routing-"));
     temporaryDirectories.push(root);

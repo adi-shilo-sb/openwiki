@@ -27,6 +27,7 @@ import {
   AGENT_FILESYSTEM_PERMISSIONS,
   createAgentBackend,
 } from "./agent-backend.js";
+import { createBedrockPromptCachingMiddleware } from "./bedrock-prompt-caching-middleware.js";
 import { OpenWikiLocalShellBackend } from "./docs-only-backend.js";
 import { OpenWikiIgnore } from "./openwiki-ignore.js";
 import {
@@ -338,6 +339,7 @@ async function runPlanningAgent(
     tools: [submitPlanTool],
     backend,
     middleware: [
+      createBedrockPromptCachingMiddleware(),
       createFilesystemMiddleware({
         backend,
         permissions: AGENT_FILESYSTEM_PERMISSIONS,
@@ -474,6 +476,7 @@ async function runPageAgent(
     tools: [inspectClaimsTool, submitPageTool],
     backend,
     middleware: [
+      createBedrockPromptCachingMiddleware(),
       createFilesystemMiddleware({
         backend,
         permissions: AGENT_FILESYSTEM_PERMISSIONS,

@@ -38,6 +38,7 @@ type ModelToolRequest = {
 };
 
 type CapturedMiddleware = {
+  name?: string;
   wrapModelCall?: (
     request: ModelToolRequest,
     handler: (request: ModelToolRequest) => Promise<ModelToolRequest>,
@@ -638,6 +639,19 @@ describe("runNativeRepositoryGeneration", () => {
     expect(harness.restoreCalls).toBe(0);
     expect(harness.currentRun?.state.plan?.pages[0]?.status).toBe("complete");
     expect(harness.finishCalls).toBe(1);
+  });
+
+  test("installs Bedrock prompt caching on the planner and every page worker", async () => {
+    harness.planPaths = ["/openwiki/first.md", "/openwiki/second.md"];
+
+    await runHarness();
+
+    expect(harness.agentOptions.length).toBeGreaterThan(1);
+    for (const { middleware } of harness.agentOptions) {
+      expect(middleware.map(({ name }) => name)).toContain(
+        "OpenWikiBedrockPromptCaching",
+      );
+    }
   });
 
   test("filters DeepAgents' automatic task capability at the model boundary", async () => {
