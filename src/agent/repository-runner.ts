@@ -27,7 +27,7 @@ import {
   AGENT_FILESYSTEM_PERMISSIONS,
   createAgentBackend,
 } from "./agent-backend.js";
-import { createBedrockPromptCachingMiddleware } from "./bedrock-prompt-caching-middleware.js";
+import { createOptionalBedrockPromptCachingMiddleware } from "./bedrock-prompt-caching-middleware.js";
 import { OpenWikiLocalShellBackend } from "./docs-only-backend.js";
 import { OpenWikiIgnore } from "./openwiki-ignore.js";
 import {
@@ -334,18 +334,19 @@ async function runPlanningAgent(
   });
 
   const backend = createAgentBackend(wikiBackend);
+  const promptCaching = createOptionalBedrockPromptCachingMiddleware(model);
   const agent = createDeepAgent({
     model,
     tools: [submitPlanTool],
     backend,
     middleware: [
-      createBedrockPromptCachingMiddleware(),
       createFilesystemMiddleware({
         backend,
         permissions: AGENT_FILESYSTEM_PERMISSIONS,
         tools: PLANNER_FILESYSTEM_TOOLS,
       }),
       NO_DELEGATION_MIDDLEWARE,
+      ...(promptCaching ? [promptCaching] : []),
     ],
     skills: ["/skills/"],
     subagents: [],
@@ -471,18 +472,19 @@ async function runPageAgent(
   });
 
   const backend = createAgentBackend(wikiBackend);
+  const promptCaching = createOptionalBedrockPromptCachingMiddleware(model);
   const agent = createDeepAgent({
     model,
     tools: [inspectClaimsTool, submitPageTool],
     backend,
     middleware: [
-      createBedrockPromptCachingMiddleware(),
       createFilesystemMiddleware({
         backend,
         permissions: AGENT_FILESYSTEM_PERMISSIONS,
         tools: PAGE_FILESYSTEM_TOOLS,
       }),
       NO_DELEGATION_MIDDLEWARE,
+      ...(promptCaching ? [promptCaching] : []),
     ],
     skills: ["/skills/"],
     subagents: [],

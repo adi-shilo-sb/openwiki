@@ -1,6 +1,7 @@
 import { ChatBedrockConverse } from "@langchain/aws";
+import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { createBedrockPromptCachingMiddleware } from "../../src/agent/bedrock-prompt-caching-middleware.ts";
+import { createOptionalBedrockPromptCachingMiddleware } from "../../src/agent/bedrock-prompt-caching-middleware.ts";
 
 type CachingRequest = {
   model: unknown;
@@ -28,7 +29,7 @@ afterEach(() => {
   }
 });
 
-function createBedrockModel(): ChatBedrockConverse {
+function createBedrockModel(): BaseChatModel {
   return new ChatBedrockConverse({
     model: "us.anthropic.claude-sonnet-5",
     region: "us-east-1",
@@ -36,20 +37,27 @@ function createBedrockModel(): ChatBedrockConverse {
   });
 }
 
-async function wrap(request: CachingRequest): Promise<CachingRequest> {
-  const { wrapModelCall } =
-    createBedrockPromptCachingMiddleware() as unknown as CachingMiddleware;
+function createOtherProviderModel(): BaseChatModel {
+  return { getName: () => "ChatOpenAI" } as unknown as BaseChatModel;
+}
 
-  if (!wrapModelCall) {
+async function wrap(
+  model: BaseChatModel,
+  request: CachingRequest = { model },
+): Promise<CachingRequest> {
+  const middleware = createOptionalBedrockPromptCachingMiddleware(model) as
+    CachingMiddleware | undefined;
+
+  if (!middleware?.wrapModelCall) {
     throw new Error("Expected the Bedrock prompt-caching model-call wrapper.");
   }
 
-  return wrapModelCall(request, (next) => Promise.resolve(next));
+  return middleware.wrapModelCall(request, (next) => Promise.resolve(next));
 }
 
-describe("createBedrockPromptCachingMiddleware", () => {
+describe("createOptionalBedrockPromptCachingMiddleware", () => {
   test("requests a 5m ephemeral cache point for Bedrock Converse models", async () => {
-    const forwarded = await wrap({ model: createBedrockModel() });
+    const forwarded = await wrap(createBedrockModel());
 
     expect(forwarded.modelSettings).toEqual({
       cache_control: { type: "ephemeral", ttl: "5m" },
@@ -59,43 +67,30 @@ describe("createBedrockPromptCachingMiddleware", () => {
   test("honors the configured TTL", async () => {
     process.env.OPENWIKI_BEDROCK_CACHE_TTL = "1h";
 
-    const forwarded = await wrap({ model: createBedrockModel() });
+    const forwarded = await wrap(createBedrockModel());
 
     expect(forwarded.modelSettings).toEqual({
       cache_control: { type: "ephemeral", ttl: "1h" },
     });
   });
 
-  test("forwards the request unchanged when caching is turned off", async () => {
-    process.env.OPENWIKI_BEDROCK_CACHE_TTL = "off";
-    const request = { model: createBedrockModel() };
+  test("identifies the model by name rather than by class identity", async () => {
+    const duplicatedPackageModel = {
+      getName: () => "ChatBedrockConverse",
+    } as unknown as BaseChatModel;
 
-    const forwarded = await wrap(request);
+    const forwarded = await wrap(duplicatedPackageModel);
 
-    expect(forwarded).toBe(request);
-    expect(forwarded.modelSettings).toBeUndefined();
-  });
-
-  test("rejects an invalid TTL before the agent runs", () => {
-    process.env.OPENWIKI_BEDROCK_CACHE_TTL = "10m";
-
-    expect(() => createBedrockPromptCachingMiddleware()).toThrow(
-      /OPENWIKI_BEDROCK_CACHE_TTL/u,
-    );
-  });
-
-  test("forwards the request unchanged for every other provider", async () => {
-    const request = { model: { _llmType: () => "openai" } };
-
-    const forwarded = await wrap(request);
-
-    expect(forwarded).toBe(request);
-    expect(forwarded.modelSettings).toBeUndefined();
+    expect(forwarded.modelSettings).toEqual({
+      cache_control: { type: "ephemeral", ttl: "5m" },
+    });
   });
 
   test("preserves model settings contributed by other middleware", async () => {
-    const forwarded = await wrap({
-      model: createBedrockModel(),
+    const model = createBedrockModel();
+
+    const forwarded = await wrap(model, {
+      model,
       modelSettings: { strict: true },
     });
 
@@ -103,5 +98,44 @@ describe("createBedrockPromptCachingMiddleware", () => {
       strict: true,
       cache_control: { type: "ephemeral", ttl: "5m" },
     });
+  });
+
+  test("forwards the request unchanged when the model is swapped for another provider's", async () => {
+    const request = { model: createOtherProviderModel() };
+
+    const forwarded = await wrap(createBedrockModel(), request);
+
+    expect(forwarded).toBe(request);
+    expect(forwarded.modelSettings).toBeUndefined();
+  });
+
+  test("installs nothing when caching is turned off", () => {
+    process.env.OPENWIKI_BEDROCK_CACHE_TTL = "off";
+
+    expect(
+      createOptionalBedrockPromptCachingMiddleware(createBedrockModel()),
+    ).toBeUndefined();
+  });
+
+  test("installs nothing for a model from another provider", () => {
+    expect(
+      createOptionalBedrockPromptCachingMiddleware(createOtherProviderModel()),
+    ).toBeUndefined();
+  });
+
+  test("rejects an invalid TTL before a Bedrock agent runs", () => {
+    process.env.OPENWIKI_BEDROCK_CACHE_TTL = "10m";
+
+    expect(() =>
+      createOptionalBedrockPromptCachingMiddleware(createBedrockModel()),
+    ).toThrow(/OPENWIKI_BEDROCK_CACHE_TTL/u);
+  });
+
+  test("never reads the Bedrock TTL for another provider's model", () => {
+    process.env.OPENWIKI_BEDROCK_CACHE_TTL = "10m";
+
+    expect(
+      createOptionalBedrockPromptCachingMiddleware(createOtherProviderModel()),
+    ).toBeUndefined();
   });
 });

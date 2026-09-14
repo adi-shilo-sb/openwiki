@@ -1215,8 +1215,8 @@ export function resolveBedrockMaxTokens(
 }
 
 // Selects the Bedrock prompt-cache lifetime. A wiki run re-sends one large
-// stable prefix (system prompt, tool definitions, skills) on every model call,
-// so the default caches it for the 5 minutes that span consecutive calls.
+// stable prefix on every model call, so the default caches it for the 5 minutes
+// that span consecutive calls.
 // Override via OPENWIKI_BEDROCK_CACHE_TTL: "1h" for runs whose calls are spaced
 // further apart, "off" for models or accounts where cache writes are not worth
 // their surcharge.
