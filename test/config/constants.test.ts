@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   BASETEN_BASE_URL_ENV_KEY,
+  BOB_BASE_URL_ENV_KEY,
   BEDROCK_DEFAULT_CACHE_TTL,
   BEDROCK_DEFAULT_MAX_TOKENS,
   DEFAULT_MODEL_ID,
@@ -235,6 +236,11 @@ describe("resolveProviderBaseUrl", () => {
         [BASETEN_BASE_URL_ENV_KEY]: "https://gateway.example/baseten/v1",
       }),
     ).toBe("https://gateway.example/baseten/v1");
+    expect(
+      resolveProviderBaseUrl("bob", {
+        [BOB_BASE_URL_ENV_KEY]: "https://gateway.example/bob/v1",
+      }),
+    ).toBe("https://gateway.example/bob/v1");
     expect(
       resolveProviderBaseUrl("fireworks", {
         [FIREWORKS_BASE_URL_ENV_KEY]: "https://gateway.example/fireworks/v1",
@@ -1162,6 +1168,15 @@ describe("isModelIdForOtherProvider", () => {
     expect(isModelIdForOtherProvider("claude-opus-4-8", "anthropic")).toBe(
       false,
     );
+  });
+
+  test("does not flag Claude Opus 5 on the providers that serve Claude", () => {
+    // Opus 5 was listed only under copilot, so both providers that serve Claude
+    // directly warned that it "belongs to GitHub Copilot" on every run.
+    expect(isModelIdForOtherProvider("claude-opus-5", "anthropic")).toBe(false);
+    expect(
+      isModelIdForOtherProvider("claude-opus-5", "gemini-enterprise"),
+    ).toBe(false);
   });
 
   test("does not flag shared OpenAI models across openai / openai-chatgpt", () => {
